@@ -80,3 +80,17 @@ aws cloudformation create-stack \
     ParameterKey=TrustedAccountId,ParameterValue=310022570453 \
     ParameterKey=RoleName,ParameterValue=PHICloudMonitorScannerRole
 
+### Vendor AssumeRole Target (RoleArn)
+
+After the stack is created, the customer must provide the Role ARN created by the stack.
+
+Example (test customer):
+arn:aws:iam::128552473428:role/PhiScannerReadOnlyRole
+
+This is the **RoleArn** that PHI Cloud Monitor (scanner account) assumes via STS to perform read-only scans.
+
+How to verify, if you are curious:
+aws sts assume-role \
+  --role-arn arn:aws:iam::128552473428:role/PhiScannerReadOnlyRole \
+  --role-session-name phi-cloud-monitor-scan-test
+
