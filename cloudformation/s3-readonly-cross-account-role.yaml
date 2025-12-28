@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a cross-account, read-only IAM role allowing vendor account 310022570453
+  to read S3 objects from super-secret-hippa-data. Requires ExternalId.
+
+Parameters:
+  VendorAccountId:
+    Type: String
+    Default: "310022570453"
+    Description: Vendor AWS Account ID allowed to assume this role.
+
+  ExternalId:
+    Type: String
+    NoEcho: true
+    Description: ExternalId shared with the vendor. Customer should generate.
+
+  RoleName:
+    Type: String
+    Default: "PhiScannerReadOnlyRole"
+    Description: Name of the IAM role to create.
+
+  TargetBucketName:
+    Type: String
+    Default: "super-secret-hippa-data"
+    Description: S3 bucket name to scan.
+
+  TargetPrefix:
+    Type: String
+    Default: ""
+    Description: Optional prefix to restrict scanning (e.g. hipaa/). Blank scans entire bucket.
+
+Conditions:
+  HasPrefix: !Not [!Equals [!Ref TargetPrefix, ""]]
+
+Resources:
+  PhiScannerReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Cross-account read-only role for vendor PHI scanner
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: VendorAssumeRoleWithExternalId
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${VendorAccountId}:root"
+            Action: "sts:AssumeRole"
+            Condition:
+              StringEquals:
+                "sts:ExternalId": !Ref ExternalId
+
+      Policies:
+        - PolicyName: PhiScannerS3ReadOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListBucket
+                Effect: Allow
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:GetBucketLocation"
+                Resource: !Sub "arn:aws:s3:::${TargetBucketName}"
+                Condition: !If
+                  - HasPrefix
+                  - StringLike:
+                      "s3:prefix":
+                        - !Sub "${TargetPrefix}*"
+                        - !Ref TargetPrefix
+                  - !Ref "AWS::NoValue"
+
+              - Sid: GetObjects
+                Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource: !If
+                  - HasPrefix
+                  - !Sub "arn:aws:s3:::${TargetBucketName}/${TargetPrefix}*"
+                  - !Sub "arn:aws:s3:::${TargetBucketName}/*"
+
+Outputs:
+  RoleArn:
+    Description: ARN of the role the vendor will assume
+    Value: !GetAtt PhiScannerReadOnlyRole.Arn
+
